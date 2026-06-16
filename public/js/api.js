@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/api/';
+const API_URL = 'https://td-python-4gr8.onrender.com/api/';
 
 const TD_API = {
     token: localStorage.getItem('api_token'),
