@@ -36,7 +36,7 @@ router.post('/login', async (req, res) => {
         }
         
         const [users] = await db.query(
-            'SELECT * FROM users WHERE username = ? AND role_id = 1 AND is_active = 1',
+            'SELECT * FROM users WHERE username = ? AND role_id = 1 AND is_active = 1 AND is_banned = 0',
             [username]
         );
         
@@ -71,6 +71,8 @@ router.get('/users', isAdmin, async (req, res) => {
                 u.username, 
                 u.email, 
                 u.campaign_progress,
+                u.is_banned,
+                u.ban_reason,
                 COALESCE(s.total_kills, 0) as total_kills,
                 COALESCE(s.total_waves, 0) as total_waves,
                 COALESCE(s.best_wave, 0) as best_wave,
@@ -81,7 +83,7 @@ router.get('/users', isAdmin, async (req, res) => {
                 COALESCE(s.total_towers_built, 0) as total_towers_built
             FROM users u
             LEFT JOIN user_game_stats s ON u.id = s.user_id
-            WHERE u.role_id = 2
+            WHERE u.role_id != 1
             ORDER BY u.id ASC
         `);
         res.json({ success: true, users });
@@ -90,17 +92,42 @@ router.get('/users', isAdmin, async (req, res) => {
     }
 });
 
-router.delete('/users/:id', isAdmin, async (req, res) => {
+router.put('/users/:id/ban', isAdmin, async (req, res) => {
     try {
         const userId = req.params.id;
+        const { reason } = req.body;
         
-        const [check] = await db.query('SELECT id FROM users WHERE id = ? AND role_id = 2', [userId]);
+        const [check] = await db.query('SELECT id FROM users WHERE id = ? AND role_id != 1', [userId]);
         if (check.length === 0) {
             return res.status(404).json({ success: false, message: 'Пользователь не найден' });
         }
         
-        await db.query('DELETE FROM users WHERE id = ?', [userId]);
-        res.json({ success: true });
+        await db.query(
+            'UPDATE users SET is_banned = 1, is_active = 0, ban_reason = ? WHERE id = ?',
+            [reason || 'Нарушение правил', userId]
+        );
+        
+        res.json({ success: true, message: 'Пользователь забанен' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put('/users/:id/unban', isAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        
+        const [check] = await db.query('SELECT id FROM users WHERE id = ? AND role_id != 1', [userId]);
+        if (check.length === 0) {
+            return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+        }
+        
+        await db.query(
+            'UPDATE users SET is_banned = 0, is_active = 1, ban_reason = NULL WHERE id = ?',
+            [userId]
+        );
+        
+        res.json({ success: true, message: 'Пользователь разбанен' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

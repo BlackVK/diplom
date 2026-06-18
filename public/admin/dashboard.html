@@ -42,9 +42,8 @@
                             <th>Email</th>
                             <th>Убийств</th>
                             <th>Лучшая волна</th>
-                            <th>Игр сыграно</th>
-                            <th>Победы</th>
-                            <th>Поражения</th>
+                            <th>Игр</th>
+                            <th>Статус</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
@@ -80,6 +79,9 @@
                         totalKills += user.total_kills || 0;
                         totalGames += user.games_played || 0;
                         
+                        const isBanned = user.is_banned === 1;
+                        const statusText = isBanned ? '🔴 Забанен' : '🟢 Активен';
+                        
                         tbody.innerHTML += `
                             <tr>
                                 <td>${user.id}</td>
@@ -88,10 +90,12 @@
                                 <td>${user.total_kills || 0}</td>
                                 <td>${user.best_wave || 0}</td>
                                 <td>${user.games_played || 0}</td>
-                                <td>${user.wins || 0}</td>
-                                <td>${user.losses || 0}</td>
+                                <td>${statusText}</td>
                                 <td>
-                                    <button class="delete-btn" onclick="deleteUser(${user.id})">Удалить</button>
+                                    ${!isBanned ? 
+                                        `<button class="ban-btn" onclick="banUser(${user.id})">Забанить</button>` :
+                                        `<button class="unban-btn" onclick="unbanUser(${user.id})">Разбанить</button>`
+                                    }
                                 </td>
                             </tr>
                         `;
@@ -106,23 +110,49 @@
             }
         }
         
-        async function deleteUser(userId) {
-            if (!confirm('Удалить пользователя?')) return;
+        async function banUser(userId) {
+            const reason = prompt('Причина бана:');
+            if (reason === null) return;
             
             try {
-                const response = await fetch('/api/admin/users/' + userId, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': 'Bearer ' + token }
+                const response = await fetch('/api/admin/users/' + userId + '/ban', {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token 
+                    },
+                    body: JSON.stringify({ reason: reason || 'Нарушение правил' })
                 });
                 const data = await response.json();
-                
                 if (data.success) {
                     loadUsers();
                 } else {
                     alert(data.message);
                 }
             } catch (error) {
-                alert('Ошибка удаления');
+                alert('Ошибка');
+            }
+        }
+        
+        async function unbanUser(userId) {
+            if (!confirm('Разбанить пользователя?')) return;
+            
+            try {
+                const response = await fetch('/api/admin/users/' + userId + '/unban', {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token 
+                    }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadUsers();
+                } else {
+                    alert(data.message);
+                }
+            } catch (error) {
+                alert('Ошибка');
             }
         }
         

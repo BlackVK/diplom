@@ -4,11 +4,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
-function isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
-    return emailRegex.test(email);
-}
-
 router.post('/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
@@ -19,10 +14,6 @@ router.post('/register', async (req, res) => {
         
         if (username.length < 3) {
             return res.status(400).json({ success: false, message: 'Имя пользователя минимум 3 символа' });
-        }
-        
-        if (!isValidEmail(email)) {
-            return res.status(400).json({ success: false, message: 'Введите корректный email' });
         }
         
         if (password.length < 4) {
@@ -43,11 +34,7 @@ router.post('/register', async (req, res) => {
         
         const userId = result.insertId;
         
-        await db.query(
-            `INSERT INTO user_game_stats (user_id, total_kills, total_waves, total_towers_built, total_upgrades, games_played, wins, losses, best_wave, best_score, play_time) 
-             VALUES (?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)`,
-            [userId]
-        );
+        await db.query('INSERT INTO user_game_stats (user_id) VALUES (?)', [userId]);
         
         res.json({ 
             success: true, 
@@ -59,6 +46,7 @@ router.post('/register', async (req, res) => {
             }
         });
     } catch (error) {
+        console.error('Ошибка регистрации:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });
@@ -69,16 +57,26 @@ router.post('/login', async (req, res) => {
         const ip = req.ip || req.connection.remoteAddress;
         const userAgent = req.headers['user-agent'];
         
-        const [users] = await db.query(
-            'SELECT id, username, email, password_hash, campaign_progress FROM users WHERE username = ? AND is_active = 1 AND is_banned = 0',
-            [username]
-        );
+        const [users] = await db.query('SELECT * FROM users WHERE username = ?', [username]);
         
         if (users.length === 0) {
             return res.status(401).json({ success: false, message: 'Пользователь не найден' });
         }
         
         const user = users[0];
+        
+        if (user.is_banned === 1) {
+            const reason = user.ban_reason || 'Нарушение правил';
+            return res.status(403).json({ 
+                success: false, 
+                message: `Ваш аккаунт заблокирован. Причина: ${reason}` 
+            });
+        }
+        
+        if (user.is_active === 0) {
+            return res.status(403).json({ success: false, message: 'Аккаунт деактивирован' });
+        }
+        
         const isValidPassword = await bcrypt.compare(password, user.password_hash);
         
         if (!isValidPassword) {
@@ -111,6 +109,7 @@ router.post('/login', async (req, res) => {
             token
         });
     } catch (error) {
+        console.error('Ошибка входа:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });
