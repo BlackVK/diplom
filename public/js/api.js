@@ -1,4 +1,6 @@
-const API_URL = 'https://td-python-4gr8.onrender.com/api/';
+const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:3000/api/' 
+    : 'https://td-python-4gr8.onrender.com/api/';
 
 const TD_API = {
     token: localStorage.getItem('api_token'),
@@ -57,6 +59,10 @@ const TD_API = {
     
     async getLeaderboard(mapId, sort = 'waves') {
         return await this.request(`leaderboard/${mapId}?sort=${sort}`);
+    },
+    
+    async updateProgress(level) {
+    return await this.request('user/progress', 'PUT', { level });
     }
 };
 

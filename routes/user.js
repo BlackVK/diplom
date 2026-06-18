@@ -7,29 +7,23 @@ router.get('/stats', authMiddleware, async (req, res) => {
     try {
         const userId = req.userId;
         
-        const [stats] = await db.query(
-            'SELECT total_kills, best_wave, best_score, games_played, wins, losses FROM user_game_stats WHERE user_id = ?',
-            [userId]
-        );
-        
-        const [user] = await db.query(
-            'SELECT campaign_progress, username, email FROM users WHERE id = ?',
-            [userId]
-        );
+        const [stats] = await db.query('SELECT * FROM user_game_stats WHERE user_id = ?', [userId]);
+        const [user] = await db.query('SELECT campaign_progress FROM users WHERE id = ?', [userId]);
         
         res.json({
             success: true,
-            stats: stats[0] || { 
-                total_kills: 0, 
-                best_wave: 0, 
+            stats: stats[0] || {
+                total_kills: 0,
+                best_wave: 0,
                 best_score: 0,
                 games_played: 0,
                 wins: 0,
                 losses: 0
             },
-            user: user[0] || { username: 'Unknown', campaign_progress: 1 }
+            campaign_progress: user[0]?.campaign_progress || 1
         });
     } catch (error) {
+        console.error('Ошибка:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });

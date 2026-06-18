@@ -16,6 +16,8 @@ class GameEngine {
         this.kills = 0;
         this.towersBuilt = 0;
         this.upgradesDone = 0;
+        this.totalTowersBuilt = 0;
+        this.totalUpgrades = 0;
         
         this.waypoints = [];
         this.pathMode = 'wave';
@@ -29,7 +31,7 @@ class GameEngine {
         this.frameCount = 0;
         this.animationTime = 0;
         this.requiredWaves = 0;
-        this.hoveredTower = null;
+        this.waypointPath = [];
         
         this.config = {
             towerCost: 50,
@@ -67,6 +69,8 @@ class GameEngine {
         this.kills = 0;
         this.towersBuilt = 0;
         this.upgradesDone = 0;
+        this.totalTowersBuilt = 0;
+        this.totalUpgrades = 0;
         
         this.enemies = [];
         this.towers = [];
@@ -99,7 +103,6 @@ class GameEngine {
             if (window.updateMouseCoords) {
                 window.updateMouseCoords(Math.round(x), Math.round(y));
             }
-            this.checkTowerHover(x, y);
         });
     }
     
@@ -107,6 +110,7 @@ class GameEngine {
         const w = this.canvas.width / this.dpr;
         const h = this.canvas.height / this.dpr;
         this.waypoints = [];
+        this.waypointPath = [];
         
         if (this.pathMode === 'straight') {
             this.waypoints = [
@@ -146,43 +150,27 @@ class GameEngine {
             this.waypoints[0].x = -40;
             this.waypoints[this.waypoints.length - 1].x = w + 40;
         }
-    }
-    
-    distanceToSegment(px, py, x1, y1, x2, y2) {
-        const ax = px - x1;
-        const ay = py - y1;
-        const bx = x2 - x1;
-        const by = y2 - y1;
-        const dot = ax * bx + ay * by;
-        const len2 = bx * bx + by * by;
-        if (len2 === 0) return Math.hypot(ax, ay);
-        let t = dot / len2;
-        t = Math.max(0, Math.min(1, t));
-        const projX = x1 + t * bx;
-        const projY = y1 + t * by;
-        return Math.hypot(px - projX, py - projY);
-    }
-    
-    checkTowerHover(mouseX, mouseY) {
-        let newHover = null;
-        for (let tower of this.towers) {
-            const dx = tower.x - mouseX;
-            const dy = tower.y - mouseY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < 30) {
-                newHover = tower;
-                break;
+        
+        for (let i = 0; i < this.waypoints.length - 1; i++) {
+            const steps = 20;
+            for (let j = 0; j <= steps; j++) {
+                const t = j / steps;
+                const x = this.waypoints[i].x + (this.waypoints[i + 1].x - this.waypoints[i].x) * t;
+                const y = this.waypoints[i].y + (this.waypoints[i + 1].y - this.waypoints[i].y) * t;
+                this.waypointPath.push({ x, y });
             }
         }
-        this.hoveredTower = newHover;
     }
     
-    isWaveActive() {
-        return this.enemies.length > 0 || this.enemySpawnQueue.length > 0;
-    }
-    
-    isGameRunning() {
-        return this.gameStarted && !this.gameOver;
+    isOnPath(x, y) {
+        const pathRadius = 35;
+        for (let point of this.waypointPath) {
+            const distance = Math.hypot(x - point.x, y - point.y);
+            if (distance < pathRadius) {
+                return true;
+            }
+        }
+        return false;
     }
     
     spawn_wave() {
@@ -196,7 +184,7 @@ class GameEngine {
             this.enemySpawnQueue.push({
                 hp: hp,
                 speed: speed,
-                delay: i * 0.5
+                delay: i * 0.3
             });
         }
         
@@ -216,43 +204,43 @@ class GameEngine {
             return false;
         }
         
-        if (this.towers.some(t => t.name === name)) {
-            if (window.log) window.log(`❌ Башня с именем "${name}" уже существует`);
+        if (this.isOnPath(x, y)) {
+            if (window.log) window.log('❌ Нельзя ставить башню на дорогу!');
             return false;
         }
         
-        for (let i = 0; i < this.waypoints.length - 1; i++) {
-            const p1 = this.waypoints[i];
-            const p2 = this.waypoints[i + 1];
-            const distance = this.distanceToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
-            if (distance < 35) {
-                if (window.log) window.log('❌ Нельзя строить башню на пути движения врагов!');
-                return false;
-            }
+        if (this.towers.some(t => t.name === name)) {
+            if (window.log) window.log(`❌ Башня с именем "${name}" уже существует`);
+            return false;
         }
         
         const minDistance = 60;
         for (let tower of this.towers) {
             const distance = Math.hypot(tower.x - x, tower.y - y);
             if (distance < minDistance) {
-                if (window.log) window.log('❌ Слишком близко к другой башне');
+                if (window.log) window.log('❌ Слишком близко к другой башне (мин. 60px)');
                 return false;
             }
         }
         
-        if (this.money < this.config.towerCost) {
-            if (window.log) window.log(`❌ Недостаточно денег. Нужно: ${this.config.towerCost}`);
+        const baseCost = 50;
+        const costMultiplier = 1.2;
+        const towerCost = Math.floor(baseCost * Math.pow(costMultiplier, this.totalTowersBuilt));
+        
+        if (this.money < towerCost) {
+            if (window.log) window.log(`❌ Недостаточно денег. Нужно: ${towerCost}`);
             return false;
         }
         
         this.towers.push(new Tower(x, y, name));
-        this.money -= this.config.towerCost;
+        this.money -= towerCost;
+        this.totalTowersBuilt++;
         this.towersBuilt++;
         this.updateUI();
         this.createExplosion(x, y, '#00c2ff', 12);
         
         if (window.log) {
-            window.log(`🏗️ Построена башня "${name}" в (${x}, ${y}) (-${this.config.towerCost})`);
+            window.log(`🏗️ Построена башня "${name}" в (${x}, ${y}) (-${towerCost})`);
         }
         
         return true;
@@ -265,8 +253,12 @@ class GameEngine {
             return false;
         }
         
-        if (this.money < this.config.upgradeCost) {
-            if (window.log) window.log(`❌ Нужно ${this.config.upgradeCost} денег для улучшения`);
+        const baseUpgradeCost = 30;
+        const upgradeMultiplier = 1.3;
+        const upgradeCost = Math.floor(baseUpgradeCost * Math.pow(upgradeMultiplier, this.totalUpgrades));
+        
+        if (this.money < upgradeCost) {
+            if (window.log) window.log(`❌ Нужно ${upgradeCost} денег для улучшения`);
             return false;
         }
         
@@ -276,14 +268,15 @@ class GameEngine {
         tower.range += 10;
         tower.color = this.getTowerColor(tower.level);
         
-        this.money -= this.config.upgradeCost;
-        this.score += 5;
+        this.money -= upgradeCost;
+        this.totalUpgrades++;
         this.upgradesDone++;
+        this.score += 5;
         this.updateUI();
         this.createExplosion(tower.x, tower.y, '#ffd166', 8);
         
         if (window.log) {
-            window.log(`⚡ Улучшена башня "${name}" → L${tower.level} (+5 к счету)`);
+            window.log(`⚡ Улучшена башня "${name}" → L${tower.level} (-${upgradeCost})`);
         }
         
         return true;
@@ -311,6 +304,8 @@ class GameEngine {
         this.towers = [];
         this.particles = [];
         this.enemySpawnQueue = [];
+        this.totalTowersBuilt = 0;
+        this.totalUpgrades = 0;
         
         if (this.gameMode === 'campaign' && this.levelData) {
             this.lives = this.levelData.startingLives || 10;
@@ -480,10 +475,6 @@ class GameEngine {
         this.towers.forEach(t => t.draw(ctx, this.animationTime));
         this.enemies.forEach(e => e.draw(ctx, this.animationTime));
         this.bullets.forEach(b => b.draw(ctx));
-        
-        if (this.hoveredTower) {
-            this.hoveredTower.drawRangeHighlight(ctx);
-        }
     }
     
     drawPath() {
@@ -683,16 +674,12 @@ class Tower {
     }
     
     draw(ctx, time) {
-        const pulse = 1 + Math.sin(time * 5 + this.pulsePhase) * 0.03;
-        
-        ctx.shadowBlur = 15;
         ctx.fillStyle = 'rgba(30, 40, 50, 0.9)';
         ctx.beginPath();
         this.roundRect(ctx, this.x - 24, this.y - 24, 48, 48, 8);
         ctx.fill();
         
         ctx.fillStyle = this.color;
-        ctx.shadowBlur = 20;
         ctx.beginPath();
         this.roundRect(ctx, this.x - 20, this.y - 20, 40, 40, 6);
         ctx.fill();
@@ -710,8 +697,7 @@ class Tower {
         ctx.fill();
         ctx.restore();
         
-        ctx.shadowBlur = 5;
-        ctx.fillStyle = '#ffaa33';
+        ctx.fillStyle = '#dbeafe';
         ctx.font = 'bold 12px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -720,18 +706,6 @@ class Tower {
         ctx.fillStyle = '#ffd166';
         ctx.font = 'bold 11px monospace';
         ctx.fillText('L' + this.level, this.x, this.y + 32);
-        
-        ctx.shadowBlur = 0;
-    }
-    
-    drawRangeHighlight(ctx) {
-        ctx.strokeStyle = 'rgba(255, 170, 51, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
     }
     
     roundRect(ctx, x, y, w, h, r) {

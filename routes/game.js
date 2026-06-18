@@ -36,38 +36,25 @@ router.post('/save', authMiddleware, async (req, res) => {
                 userId
             ]
         );
-
-        if (gameData.gameMode === 'sandbox' && gameData.wave > 0) {
-            const [existing] = await db.query(
-                'SELECT id, wave FROM leaderboards WHERE user_id = ? AND map_id = ?',
-                [userId, gameData.mapId]
-            );
-            
-            if (existing.length === 0) {
-                await db.query(
-                    `INSERT INTO leaderboards (user_id, username, map_id, wave, score, kills) 
-                     VALUES (?, ?, ?, ?, ?, ?)`,
-                    [userId, username, gameData.mapId, gameData.wave, gameData.score, gameData.kills]
-                );
-            } else if (gameData.wave > existing[0].wave) {
-                await db.query(
-                    `UPDATE leaderboards SET 
-                        wave = ?,
-                        score = ?,
-                        kills = ?
-                     WHERE user_id = ? AND map_id = ?`,
-                    [gameData.wave, gameData.score, gameData.kills, userId, gameData.mapId]
-                );
-            }
-        }
-
+        
         if (gameData.gameMode === 'campaign' && gameData.won && gameData.levelCompleted) {
             const newProgress = Math.min(gameData.levelCompleted + 1, 6);
             await db.query('UPDATE users SET campaign_progress = ? WHERE id = ?', [newProgress, userId]);
         }
-
+        
+        if (gameData.gameMode === 'sandbox' && gameData.wave > 0) {
+            const [existing] = await db.query('SELECT id FROM leaderboards WHERE user_id = ? AND map_id = ?', [userId, gameData.mapId]);
+            
+            if (existing.length === 0) {
+                await db.query(`INSERT INTO leaderboards (user_id, username, map_id, wave, score, kills) VALUES (?, ?, ?, ?, ?, ?)`, [userId, username, gameData.mapId, gameData.wave, gameData.score, gameData.kills]);
+            } else {
+                await db.query(`UPDATE leaderboards SET wave = GREATEST(wave, ?), score = GREATEST(score, ?), kills = GREATEST(kills, ?) WHERE user_id = ? AND map_id = ?`, [gameData.wave, gameData.score, gameData.kills, userId, gameData.mapId]);
+            }
+        }
+        
         res.json({ success: true, message: 'Игра сохранена' });
     } catch (error) {
+        console.error('Ошибка сохранения:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });

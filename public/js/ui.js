@@ -326,9 +326,8 @@ class UIManager {
         if (!this.currentUser || this.currentUser.username === 'Гость') return;
         
         try {
-            const token = localStorage.getItem('api_token');
             const response = await fetch('http://localhost:3000/api/user/stats', {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('api_token')}` }
             });
             const data = await response.json();
             
@@ -538,6 +537,48 @@ class UIManager {
         if (canvasHeight && window.game?.canvas) canvasHeight.textContent = Math.round(window.game.canvas.height / window.game.dpr);
     }
     
+    async saveGameResult(result) {
+        if (!this.currentUser || this.currentUser.username === 'Гость') return;
+        
+        try {
+            const saveData = {
+                wave: result.wave,
+                score: result.score,
+                kills: result.kills,
+                towersBuilt: result.towersBuilt,
+                upgrades: result.upgrades,
+                playTime: result.playTime || 0,
+                mapId: this.currentMap || 'wave',
+                gameMode: this.gameMode,
+                won: result.won || false,
+                levelCompleted: this.selectedCampaignLevel || 1,
+                username: this.currentUser.username
+            };
+            
+            if (window.TD_API) {
+                await window.TD_API.saveGame(saveData);
+                
+                if (result.won && this.gameMode === 'campaign') {
+                    const nextLevel = (this.selectedCampaignLevel || 1) + 1;
+                    if (nextLevel > (this.currentUser.campaignProgress || 1)) {
+                        this.currentUser.campaignProgress = nextLevel;
+                        sessionStorage.setItem('td_current_user', JSON.stringify(this.currentUser));
+                        if (window.TD_API) {
+                            await TD_API.updateProgress(nextLevel);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Ошибка сохранения:', error);
+        }
+    }
+    
+    showGameWin(result) {
+        result.won = true;
+        this.showGameOver(result);
+    }
+    
     showGameOver(result) {
         const gameOver = document.getElementById('gameOver');
         if (!gameOver) return;
@@ -573,6 +614,11 @@ class UIManager {
         gameOver.style.display = 'flex';
         this.saveGameResult(result);
         
+        if (this.currentUser && this.currentUser.username !== 'Гость') {
+            this.loadUserStats();
+            this.renderCampaignLevels();
+        }
+        
         const continueHandler = () => {
             gameOver.style.display = 'none';
             this.returnToMenu();
@@ -581,37 +627,6 @@ class UIManager {
         };
         document.addEventListener('keydown', continueHandler);
         document.addEventListener('click', continueHandler);
-    }
-    
-    showGameWin(result) {
-        result.won = true;
-        this.showGameOver(result);
-    }
-    
-    async saveGameResult(result) {
-        if (!this.currentUser || this.currentUser.username === 'Гость') return;
-        
-        try {
-            const saveData = {
-                wave: result.wave,
-                score: result.score,
-                kills: result.kills,
-                towersBuilt: result.towersBuilt,
-                upgrades: result.upgrades,
-                playTime: result.playTime || 0,
-                mapId: this.currentMap || 'wave',
-                gameMode: this.gameMode,
-                won: result.won || false,
-                levelCompleted: this.selectedCampaignLevel || 1,
-                username: this.currentUser.username
-            };
-            
-            if (window.TD_API) {
-                await window.TD_API.saveGame(saveData);
-            }
-        } catch (error) {
-            console.error('Ошибка сохранения:', error);
-        }
     }
 }
 

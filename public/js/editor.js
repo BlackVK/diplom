@@ -13,6 +13,7 @@ class CodeEditor {
         await this.loadPyodide();
         this.setupEventListeners();
         this.loadGuideContent();
+        console.log('[Editor] Редактор инициализирован');
     }
     
     setupEditor() {
@@ -74,63 +75,65 @@ class CodeEditor {
         if (!this.pyodide) return;
         
         this.pyodide.globals.set("build_tower", (name, x, y) => {
-            if (!window.game) return false;
-            if (window.game.isWaveActive && window.game.isWaveActive()) {
-                this.log("⚠️ Нельзя строить башни во время битвы!");
-                return false;
+            if (!window.game) {
+                throw new Error("Игра не запущена. Сначала выберите уровень.");
+            }
+            if (window.game.enemySpawnQueue.length > 0 || window.game.enemies.length > 0) {
+                throw new Error("❌ Нельзя строить башни во время волны! Дождитесь окончания битвы.");
             }
             return window.game.build_tower(name, x, y);
         });
         
         this.pyodide.globals.set("upgrade_tower", (name) => {
-            if (!window.game) return false;
-            if (window.game.isWaveActive && window.game.isWaveActive()) {
-                this.log("⚠️ Нельзя улучшать башни во время битвы!");
-                return false;
+            if (!window.game) {
+                throw new Error("Игра не запущена. Сначала выберите уровень.");
+            }
+            if (window.game.enemySpawnQueue.length > 0 || window.game.enemies.length > 0) {
+                throw new Error("❌ Нельзя улучшать башни во время волны! Дождитесь окончания битвы.");
             }
             return window.game.upgrade_tower(name);
         });
         
         this.pyodide.globals.set("spawn_wave", () => {
-            if (!window.game) return false;
-            if (window.game.isWaveActive && window.game.isWaveActive()) {
-                this.log("⚠️ Волна уже активна! Дождитесь её окончания.");
-                return false;
+            if (!window.game) {
+                throw new Error("Игра не запущена. Сначала выберите уровень.");
+            }
+            if (window.game.enemySpawnQueue.length > 0 || window.game.enemies.length > 0) {
+                throw new Error("❌ Нельзя запускать волну во время битвы! Дождитесь окончания.");
             }
             return window.game.spawn_wave();
         });
         
         this.pyodide.globals.set("reset_game", () => {
-            if (!window.game) return false;
-            if (window.game.isWaveActive && window.game.isWaveActive()) {
-                this.log("⚠️ Нельзя сбросить игру во время битвы!");
-                return false;
+            if (!window.game) {
+                throw new Error("Игра не запущена. Сначала выберите уровень.");
             }
             return window.game.reset_game();
         });
         
-        this.pyodide.globals.set("wait_for_wave_end", () => {
-            if (!window.game) return false;
-            while (window.game.isWaveActive && window.game.isWaveActive()) {
-                const start = Date.now();
-                while (Date.now() - start < 100) {}
-            }
-            return true;
-        });
-        
         this.pyodide.globals.set("get_towers", () => {
-            if (!window.game) return [];
+            if (!window.game) {
+                throw new Error("Игра не запущена. Сначала выберите уровень.");
+            }
             return window.game.get_towers();
         });
         
         this.pyodide.globals.set("get_game_state", () => {
-            if (!window.game) return { wave: 0, enemies: 0, money: 0, lives: 0 };
+            if (!window.game) {
+                return {
+                    wave: 0,
+                    enemies: 0,
+                    money: 0,
+                    lives: 0,
+                    isWaveActive: false
+                };
+            }
             return {
                 wave: window.game.wave,
                 enemies: window.game.enemies.length,
                 money: window.game.money,
                 lives: window.game.lives,
-                isWaveActive: window.game.isWaveActive ? window.game.isWaveActive() : false
+                isWaveActive: window.game.enemySpawnQueue.length > 0 || window.game.enemies.length > 0
             };
         });
         
@@ -140,6 +143,17 @@ class CodeEditor {
         });
         
         this.pyodide.globals.set("math", Math);
+        
+        this.pyodide.runPython(`
+import time
+
+def wait_for_wave_end():
+    while get_game_state()['isWaveActive']:
+        time.sleep(0.5)
+
+print("✅ Python готов к использованию!")
+print("💡 Доступные функции: build_tower, upgrade_tower, spawn_wave, reset_game, get_towers, get_game_state, wait_for_wave_end")
+        `);
         
         console.log('[Editor] Глобальные функции Python установлены');
     }
@@ -156,23 +170,31 @@ class CodeEditor {
             return;
         }
         
-        if (window.game && window.game.isWaveActive && window.game.isWaveActive()) {
-            this.log("⚠️ Сначала дождитесь окончания текущей волны!");
-            this.log("💡 Используйте wait_for_wave_end() в вашем коде для автоматического ожидания.");
-            return;
-        }
-        
         this.log("🚀 Выполнение кода...");
         
         try {
             const startTime = performance.now();
-            await this.pyodide.runPythonAsync(code);
+            
+            const wrappedCode = `
+try:
+    exec("""${code.replace(/"/g, '\\"')}""")
+except NameError as e:
+    print(f"❌ Ошибка: {e}")
+    print("💡 Проверьте правильность написания команды")
+    print("📋 Доступные функции: build_tower, upgrade_tower, spawn_wave, reset_game, get_towers, get_game_state, wait_for_wave_end")
+except Exception as e:
+    print(f"❌ Ошибка: {e}")
+`;
+            
+            await this.pyodide.runPythonAsync(wrappedCode);
             const endTime = performance.now();
             const executionTime = (endTime - startTime).toFixed(2);
             this.log(`✅ Код выполнен успешно за ${executionTime}мс`);
         } catch (error) {
             console.error('[Editor] Ошибка выполнения:', error);
             this.log(`❌ Ошибка Python: ${error.message}`);
+            this.log("💡 Проверьте правильность написания команд");
+            this.log("📋 Доступные функции: build_tower, upgrade_tower, spawn_wave, reset_game, get_towers, get_game_state, wait_for_wave_end");
         }
     }
     
@@ -182,7 +204,7 @@ class CodeEditor {
         
         guideContent.innerHTML = `
             <h3>🚀 Управление игрой через Python</h3>
-            
+
             <h4>📋 Основные функции:</h4>
             <ul>
                 <li><code>build_tower(имя, x, y)</code> - построить башню</li>
@@ -193,148 +215,78 @@ class CodeEditor {
                 <li><code>get_game_state()</code> - получить состояние игры</li>
                 <li><code>wait_for_wave_end()</code> - ждать окончания волны</li>
             </ul>
-            
-            <h4>⏳ Функция ожидания волны:</h4>
+
+            <h4>🔄 Цикл for</h4>
+            <p>Выполняет блок кода для каждого элемента в последовательности.</p>
             <pre>
-def wait_for_wave_end():
-    import time
-    while get_game_state()['isWaveActive']:
-        time.sleep(0.5)
-            </pre>
-            
-            <h4>🎯 Простой пример:</h4>
-            <pre>
-import time
-
-def wait_for_wave_end():
-    while get_game_state()['isWaveActive']:
-        time.sleep(0.5)
-
-reset_game()
-build_tower("моя_башня", 400, 300)
-spawn_wave()
-wait_for_wave_end()
-print("Волна пройдена!")
-            </pre>
-            
-            <h4>🔄 Прохождение всех волн:</h4>
-            <pre>
-import time
-
-def wait_for_wave_end():
-    while get_game_state()['isWaveActive']:
-        time.sleep(0.5)
-
-reset_game()
-
-build_tower("левая", 150, 200)
-build_tower("центр", 400, 300)
-build_tower("правая", 650, 200)
-upgrade_tower("центр")
-
 for i in range(5):
-    print(f"Запуск волны {i+1} из 5")
-    spawn_wave()
-    wait_for_wave_end()
-    print(f"✅ Волна {i+1} пройдена!")
+    build_tower(f"башня_{i}", 100 + i * 80, 250)</pre>
 
-print("🎉 Уровень пройден!")
-            </pre>
-            
-            <h4>⚡ Бесконечный режим:</h4>
+            <h4>🔄 Цикл while</h4>
+            <p>Выполняет блок кода, пока условие истинно.</p>
             <pre>
-import time
-
-def wait_for_wave_end():
-    while get_game_state()['isWaveActive']:
-        time.sleep(0.5)
-
-reset_game()
-
-for i in range(3):
-    build_tower(f"башня_{i}", 200 + i * 150, 250)
-
-wave = 1
 while get_game_state()['lives'] > 0:
-    print(f"🌊 Волна {wave}")
     spawn_wave()
-    wait_for_wave_end()
-    print(f"🏆 Волна {wave} пройдена! Жизней: {get_game_state()['lives']}")
-    wave += 1
-    if wave > 10:
-        break
+    wait_for_wave_end()</pre>
 
-print("Игра завершена!")
-            </pre>
-            
-            <h4>🛡️ Защита с проверкой жизней:</h4>
+            <h4>❗ try/except</h4>
+            <p>Позволяет продолжить выполнение кода, даже если произошла ошибка.</p>
             <pre>
-import time
+try:
+    build_tower("main", 400, 300)
+except:
+    print("Ошибка!")</pre>
 
-def wait_for_wave_end():
-    while get_game_state()['isWaveActive']:
-        time.sleep(0.5)
-
-reset_game()
-
-build_tower("вход", 150, 250)
-build_tower("центр", 400, 300)
-build_tower("выход", 650, 250)
-
-for wave_num in range(1, 8):
-    spawn_wave()
-    wait_for_wave_end()
-    
-    state = get_game_state()
-    if state['lives'] <= 3:
-        build_tower("экстренная", 400, 200)
-        upgrade_tower("экстренная")
-
-print("🏆 Защита устояла!")
-            </pre>
-            
-            <h4>💰 Экономичная стратегия:</h4>
-            <pre>
-import time
-
-def wait_for_wave_end():
-    while get_game_state()['isWaveActive']:
-        time.sleep(0.5)
-
-reset_game()
-
-build_tower("основная", 400, 300)
-
-for wave_num in range(1, 11):
-    print(f"Волна {wave_num}")
-    spawn_wave()
-    wait_for_wave_end()
-    
-    state = get_game_state()
-    if state['money'] >= 100 and wave_num > 3:
-        build_tower(f"доп_{wave_num}", 300 + wave_num * 20, 250)
-        print(f"💰 Построена дополнительная башня доп_{wave_num}")
-
-print("✅ Экономичная стратегия сработала!")
-            </pre>
-            
-            <h4>⚠️ Важные правила:</h4>
+            <h4>📊 get_game_state()</h4>
+            <p>Возвращает состояние игры:</p>
             <ul>
-                <li><strong>Нельзя выполнять код</strong> во время активной волны</li>
-                <li><strong>Нельзя строить башни</strong> во время битвы</li>
-                <li><strong>Нельзя улучшать башни</strong> во время битвы</li>
-                <li>Используйте <code>wait_for_wave_end()</code> для автоматического ожидания</li>
+                <li><code>wave</code> — номер волны</li>
+                <li><code>enemies</code> — врагов на поле</li>
+                <li><code>money</code> — доступные деньги</li>
+                <li><code>lives</code> — оставшиеся жизни</li>
+                <li><code>isWaveActive</code> — идёт ли битва</li>
+            </ul>
+            <pre>
+get_game_state()['money']</pre>
+
+            <h4>🏗️ get_towers()</h4>
+            <p>Возвращает список башен:</p>
+            <ul>
+                <li><code>name</code> — имя башни</li>
+                <li><code>level</code> — уровень (1-5)</li>
+                <li><code>damage</code> — урон</li>
+                <li><code>range</code> — радиус действия</li>
+            </ul>
+            <pre>
+get_towers()[0]['name']</pre>
+
+            <h4>💰 Экономика</h4>
+            <ul>
+                <li>Постройка башни: 50 + (каждая следующая на 20% дороже)</li>
+                <li>Улучшение башни: 30 + (каждое следующее на 30% дороже)</li>
+                <li>Убийство врага: +10 + (1.5 × номер волны)</li>
+                <li>Начальный капитал: 100</li>
+                <li>Начальные жизни: 10</li>
+            </ul>
+
+            <h4>❗ Правила</h4>
+            <ul>
+                <li>Нельзя строить/улучшать во время волны</li>
+                <li>Имена башен уникальны</li>
+                <li>Минимальное расстояние между башнями — 60 пикселей</li>
+                <li>Нельзя ставить башни на дорогу</li>
             </ul>
             
-            <h4>📊 Функция get_game_state():</h4>
-            <pre>
-state = get_game_state()
-print(f"Волна: {state['wave']}")
-print(f"Врагов: {state['enemies']}")
-print(f"Деньги: {state['money']}")
-print(f"Жизни: {state['lives']}")
-print(f"Идёт битва: {state['isWaveActive']}")
-            </pre>
+            <h4>❌ Частые ошибки</h4>
+            <ul>
+                <li><code>NameError: name '...' is not defined</code> — команда не существует</li>
+                <li><code>Недостаточно денег. Нужно: 50</code> — нет денег на постройку</li>
+                <li><code>Недостаточно денег. Нужно: 30</code> — нет денег на улучшение</li>
+                <li><code>Башня с именем "xxx" уже существует</code> — имя занято</li>
+                <li><code>Слишком близко к другой башне</code> — расстояние меньше 60px</li>
+                <li><code>Координаты за пределами карты</code> — выход за границы</li>
+                <li><code>Нельзя ставить башню на дорогу</code> — попытка построить на пути врагов</li>
+            </ul>
         `;
     }
     
