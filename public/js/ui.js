@@ -305,7 +305,7 @@ class UIManager {
         if (!tbody) return;
         
         try {
-            const response = await fetch(`http://localhost:3000/api/leaderboard/${mapId}?sort=${sort}`);
+            const response = await fetch(`${API_URL}leaderboard/${mapId}?sort=${sort}`);
             const data = await response.json();
             
             tbody.innerHTML = '';
@@ -326,10 +326,17 @@ class UIManager {
         if (!this.currentUser || this.currentUser.username === 'Гость') return;
         
         try {
-            const response = await fetch('http://localhost:3000/api/user/stats', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('api_token')}` }
+            const token = localStorage.getItem('api_token');
+            console.log('Загрузка статистики, токен:', token);
+            
+            const response = await fetch(`${API_URL}user/stats`, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
             });
             const data = await response.json();
+            console.log('Статистика:', data);
             
             if (data.success) {
                 const bestWaveSpan = document.getElementById('userBestWave');
