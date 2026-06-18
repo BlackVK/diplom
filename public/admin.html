@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель TD-Python</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-card">
+            <h1>🔐 Админ-панель</h1>
+            <div class="input-group">
+                <input type="text" id="adminUsername" placeholder="Имя пользователя">
+            </div>
+            <div class="input-group">
+                <input type="password" id="adminPassword" placeholder="Пароль">
+            </div>
+            <button onclick="adminLogin()">Войти</button>
+            <div id="adminError" class="error"></div>
+        </div>
+    </div>
+    <script>
+        async function adminLogin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            
+            if (!username || !password) {
+                document.getElementById('adminError').textContent = 'Заполните все поля';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    localStorage.setItem('admin_token', data.token);
+                    window.location.href = '/admin/dashboard.html';
+                } else {
+                    document.getElementById('adminError').textContent = data.message;
+                }
+            } catch (error) {
+                document.getElementById('adminError').textContent = 'Ошибка соединения с сервером';
+            }
+        }
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                adminLogin();
+            }
+        });
+    </script>
+</body>
+</html>
