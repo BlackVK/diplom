@@ -4,73 +4,52 @@ class UIManager {
         this.gameMode = null;
         this.currentMap = 'wave';
         this.selectedCampaignLevel = 1;
-        
-        this.campaignLevels = {
-            1: {
-                title: "Уровень 1: Основы",
-                map: "wave",
-                objective: "Пройдите 5 волн врагов",
-                description: "В этом уровне вы научитесь основам игры",
-                tips: ["Начните с построения башен на ключевых точках", "Используйте build_tower('имя', x, y)", "Размещайте башни на изгибах пути"],
-                rewards: "Откроется Уровень 2",
-                wavesToWin: 5,
-                startingMoney: 150,
-                startingLives: 10
-            },
-            2: {
-                title: "Уровень 2: Улучшения",
-                map: "curve",
-                objective: "Пройдите 8 волн",
-                tips: ["Постройте минимум 3 башни", "Улучшайте башни с помощью upgrade_tower()", "Балансируйте между строительством и улучшением"],
-                rewards: "Откроется Уровень 3",
-                wavesToWin: 8,
-                startingMoney: 200,
-                startingLives: 10
-            },
-            3: {
-                title: "Уровень 3: Лабиринт",
-                map: "zigzag",
-                objective: "Пройдите 10 волн",
-                tips: ["Размещайте башни в точках смены направления", "Используйте башни с максимальной дальностью"],
-                rewards: "Откроется Уровень 4",
-                wavesToWin: 10,
-                startingMoney: 250,
-                startingLives: 10
-            },
-            4: {
-                title: "Уровень 4: Зигзаг",
-                map: "zigzag",
-                objective: "Пройдите 12 волн",
-                tips: ["Экономьте деньги", "Сначала улучшайте ключевые башни"],
-                rewards: "Откроется Уровень 5",
-                wavesToWin: 12,
-                startingMoney: 200,
-                startingLives: 8
-            },
-            5: {
-                title: "Уровень 5: Финальный",
-                map: "straight",
-                objective: "Пройдите 15 волн",
-                tips: ["Стройте башни близко к пути", "Создайте несколько линий защиты"],
-                rewards: "Завершение кампании",
-                wavesToWin: 15,
-                startingMoney: 300,
-                startingLives: 10
-            }
-        };
+        this.campaignLevels = {};
     }
-    
+
     async init() {
         console.log('[UI] Инициализация интерфейса...');
         this.loadMenuTemplates();
+        await this.loadCampaignLevels();
         this.setupEventListeners();
         this.checkSavedUser();
     }
-    
+
+    async loadCampaignLevels() {
+        try {
+            const result = await TD_API.getCampaignLevels();
+            if (result.success && result.levels && result.levels.length > 0) {
+                const levels = {};
+                result.levels.forEach(level => {
+                    levels[level.level_number] = {
+                        title: level.title,
+                        map: level.map,
+                        objective: level.objective,
+                        description: level.description || '',
+                        tips: level.tips || [],
+                        rewards: level.rewards || '',
+                        wavesToWin: level.waves_to_win,
+                        startingMoney: level.starting_money,
+                        startingLives: level.starting_lives
+                    };
+                });
+                this.campaignLevels = levels;
+                console.log('[UI] Уровни загружены, количество:', Object.keys(levels).length);
+            } else {
+                console.warn('[UI] API не вернул уровни');
+                this.campaignLevels = {};
+            }
+        } catch (error) {
+            console.error('[UI] Ошибка загрузки уровней:', error);
+            this.campaignLevels = {};
+        }
+        this.renderCampaignLevels();
+    }
+
     loadMenuTemplates() {
         const mainMenu = document.getElementById('mainMenu');
         if (!mainMenu) return;
-        
+
         mainMenu.innerHTML = `
             <div class="menu-container">
                 <div id="loginSection" class="menu-section active">
@@ -82,7 +61,7 @@ class UIManager {
                     <button class="btn-menu btn-secondary" id="showRegisterBtn">Регистрация</button>
                     <button class="btn-menu btn-secondary" id="guestBtn">Играть как гость</button>
                 </div>
-                
+
                 <div id="registerSection" class="menu-section">
                     <h1 class="menu-title">📝 Регистрация</h1>
                     <div class="input-group"><input type="text" id="registerUsername" placeholder="Имя пользователя (мин. 3 символа)"></div>
@@ -92,7 +71,7 @@ class UIManager {
                     <button class="btn-menu" id="registerBtn">Зарегистрироваться</button>
                     <button class="btn-menu btn-secondary" id="backToLoginBtn">Назад к входу</button>
                 </div>
-                
+
                 <div id="mainMenuSection" class="menu-section">
                     <div class="user-info">
                         <h3>Добро пожаловать, <span id="currentUserName">Гость</span>!</h3>
@@ -106,7 +85,7 @@ class UIManager {
                     <button class="btn-menu btn-secondary" id="leaderboardBtn">🏆 Таблица лидеров</button>
                     <button class="btn-menu btn-secondary" id="logoutBtn">🚪 Выйти</button>
                 </div>
-                
+
                 <div id="sandboxMapSection" class="menu-section">
                     <h1 class="menu-title">∞ Выбор карты</h1>
                     <div class="map-selection">
@@ -118,14 +97,14 @@ class UIManager {
                     <button class="btn-menu" id="startSandboxBtn">Начать игру</button>
                     <button class="btn-menu btn-secondary" id="backToMainFromSandboxBtn">← Назад</button>
                 </div>
-                
+
                 <div id="campaignLevelsSection" class="menu-section">
                     <h1 class="menu-title">🎮 Кампания</h1>
-                    <div class="map-selection" id="campaignLevelsList"></div>
+                    <div id="campaignLevelsList" class="map-selection"></div>
                     <button class="btn-menu" id="startCampaignBtn" disabled>Начать уровень</button>
                     <button class="btn-menu btn-secondary" id="backToMainFromCampaignBtn">← Назад</button>
                 </div>
-                
+
                 <div id="leaderboardSection" class="menu-section">
                     <h1 class="menu-title">🏆 Таблица лидеров</h1>
                     <select id="leaderboardMapSelect">
@@ -149,11 +128,55 @@ class UIManager {
                 </div>
             </div>
         `;
-        
-        this.renderCampaignLevels();
+
         this.attachMenuEvents();
     }
-    
+
+    renderCampaignLevels() {
+        const container = document.getElementById('campaignLevelsList');
+        if (!container) {
+            console.error('[UI] Контейнер #campaignLevelsList не найден');
+            return;
+        }
+
+        console.log('[UI] Рендеринг уровней, данные:', this.campaignLevels);
+
+        const progress = this.currentUser ? (this.currentUser.campaignProgress || 1) : 1;
+        container.innerHTML = '';
+
+        const levelKeys = Object.keys(this.campaignLevels);
+        if (levelKeys.length === 0) {
+            container.innerHTML = '<p style="color: #9fb0c2;">Уровни не загружены</p>';
+            return;
+        }
+
+        for (let i = 1; i <= 5; i++) {
+            const level = this.campaignLevels[i];
+            if (!level) continue;
+
+            const isLocked = i > progress;
+            const isCompleted = i < progress;
+
+            const div = document.createElement('div');
+            div.className = `map-card campaign-level ${isLocked ? 'locked' : ''}`;
+            div.setAttribute('data-level', i);
+            div.innerHTML = `
+                <h4>${isCompleted ? '✅' : (isLocked ? '🔒' : '🎯')} Уровень ${i}: ${level.title.split(': ')[1] || level.title}</h4>
+                <span class="map-difficulty">${this.getDifficultyLabel(i)}</span>
+                <p>${level.objective}</p>
+            `;
+            if (!isLocked) {
+                div.addEventListener('click', () => this.selectCampaignLevel(i));
+            }
+            container.appendChild(div);
+        }
+    }
+
+    getDifficultyLabel(level) {
+        const labels = {1: 'Обучение', 2: 'Легкий', 3: 'Средний', 4: 'Сложный', 5: 'Экстремальный'};
+        return labels[level];
+    }
+
     attachMenuEvents() {
         document.getElementById('loginBtn')?.addEventListener('click', () => this.login());
         document.getElementById('showRegisterBtn')?.addEventListener('click', () => this.showRegister());
@@ -169,10 +192,10 @@ class UIManager {
         document.getElementById('startCampaignBtn')?.addEventListener('click', () => this.startCampaign());
         document.getElementById('backToMainFromCampaignBtn')?.addEventListener('click', () => this.showMainMenu());
         document.getElementById('backToMainFromLeaderboardBtn')?.addEventListener('click', () => this.showMainMenu());
-        
+
         document.getElementById('leaderboardMapSelect')?.addEventListener('change', () => this.loadLeaderboard());
         document.getElementById('leaderboardSortSelect')?.addEventListener('change', () => this.loadLeaderboard());
-        
+
         document.querySelectorAll('.map-card[data-map]').forEach(card => {
             card.addEventListener('click', () => {
                 const mapId = card.dataset.map;
@@ -180,49 +203,17 @@ class UIManager {
             });
         });
     }
-    
-    renderCampaignLevels() {
-        const container = document.getElementById('campaignLevelsList');
-        if (!container) return;
-        
-        const progress = this.currentUser ? (this.currentUser.campaignProgress || 1) : 1;
-        
-        container.innerHTML = '';
-        for (let i = 1; i <= 5; i++) {
-            const level = this.campaignLevels[i];
-            const isLocked = i > progress;
-            const isCompleted = i < progress;
-            
-            const div = document.createElement('div');
-            div.className = `map-card campaign-level ${isLocked ? 'locked' : ''}`;
-            div.setAttribute('data-level', i);
-            div.innerHTML = `
-                <h4>${isCompleted ? '✅' : (isLocked ? '🔒' : '🎯')} Уровень ${i}: ${level.title.split(': ')[1] || level.title}</h4>
-                <span class="map-difficulty">${this.getDifficultyLabel(i)}</span>
-                <p>${level.objective}</p>
-            `;
-            if (!isLocked) {
-                div.addEventListener('click', () => this.selectCampaignLevel(i));
-            }
-            container.appendChild(div);
-        }
-    }
-    
-    getDifficultyLabel(level) {
-        const labels = {1: 'Обучение', 2: 'Легкий', 3: 'Средний', 4: 'Сложный', 5: 'Экстремальный'};
-        return labels[level];
-    }
-    
+
     setupEventListeners() {
         setTimeout(() => {
             const menuBtn = document.getElementById('menuBtn');
             if (menuBtn) menuBtn.addEventListener('click', () => this.returnToMenu());
-            
+
             const resetBtn = document.getElementById('resetBtn');
             if (resetBtn) resetBtn.addEventListener('click', () => {
                 if (window.game) window.game.reset_game();
             });
-            
+
             const toggleRulerBtn = document.getElementById('toggleRulerBtn');
             if (toggleRulerBtn) {
                 toggleRulerBtn.addEventListener('click', () => {
@@ -235,52 +226,42 @@ class UIManager {
             }
         }, 100);
     }
-    
+
     checkSavedUser() {
         const savedUser = sessionStorage.getItem('td_current_user');
         const token = localStorage.getItem('api_token');
-        
-        console.log('Проверка сохранённого пользователя:', savedUser);
-        console.log('Токен:', token);
-        
+
         if (savedUser && token) {
             try {
                 this.currentUser = JSON.parse(savedUser);
                 if (!this.currentUser.campaignProgress) this.currentUser.campaignProgress = 1;
                 this.showMainMenu();
             } catch (e) {
-                console.error('Ошибка загрузки пользователя:', e);
                 this.showLogin();
             }
-        } else if (savedUser && !token) {
-            console.log('Есть пользователь, но нет токена');
-            sessionStorage.removeItem('td_current_user');
-            this.showLogin();
         } else {
             this.showLogin();
         }
     }
-    
+
     showSection(sectionId) {
         document.querySelectorAll('.menu-section').forEach(s => s.classList.remove('active'));
         const section = document.getElementById(sectionId);
         if (section) section.classList.add('active');
     }
-    
+
     showLogin() {
         this.showSection('loginSection');
     }
-    
+
     showRegister() {
         this.showSection('registerSection');
     }
-    
+
     showMainMenu() {
-        console.log('showMainMenu вызван, currentUser:', this.currentUser);
-        
         this.showSection('mainMenuSection');
         this.renderCampaignLevels();
-        
+
         const userNameSpan = document.getElementById('currentUserName');
         if (userNameSpan) {
             if (this.currentUser && this.currentUser.username !== 'Гость') {
@@ -289,48 +270,48 @@ class UIManager {
                 userNameSpan.textContent = 'Гость';
             }
         }
-        
+
         setTimeout(() => {
             this.loadUserStats();
         }, 300);
     }
-    
+
     showSandboxMaps() {
         this.showSection('sandboxMapSection');
         this.currentMap = 'wave';
-        
+
         document.querySelectorAll('.map-card[data-map]').forEach(card => {
             card.classList.remove('selected');
             if (card.dataset.map === 'wave') {
                 card.classList.add('selected');
             }
         });
-        
+
         this.updateMapInfo();
     }
-    
+
     showCampaignLevels() {
         this.showSection('campaignLevelsSection');
         this.renderCampaignLevels();
         const startBtn = document.getElementById('startCampaignBtn');
         if (startBtn) startBtn.disabled = true;
     }
-    
+
     async showLeaderboard() {
         this.showSection('leaderboardSection');
         await this.loadLeaderboard();
     }
-    
+
     async loadLeaderboard() {
         const mapId = document.getElementById('leaderboardMapSelect')?.value || 'wave';
         const sort = document.getElementById('leaderboardSortSelect')?.value || 'waves';
         const tbody = document.getElementById('leaderboardTable');
         if (!tbody) return;
-        
+
         try {
             const response = await fetch(`${API_URL}leaderboard/${mapId}?sort=${sort}`);
             const data = await response.json();
-            
+
             tbody.innerHTML = '';
             if (data.leaderboard && data.leaderboard.length > 0) {
                 data.leaderboard.forEach((entry, index) => {
@@ -344,47 +325,33 @@ class UIManager {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">Ошибка загрузки</td></tr>';
         }
     }
-    
+
     async loadUserStats() {
-        console.log('loadUserStats вызван, currentUser:', this.currentUser);
-        
         if (!this.currentUser || this.currentUser.username === 'Гость') {
             document.getElementById('userBestWave').textContent = '0';
             document.getElementById('userTotalKills').textContent = '0';
             return;
         }
-        
+
         const token = localStorage.getItem('api_token');
-        console.log('Токен для статистики:', token);
-        
-        if (!token) {
-            console.log('Нет токена, статистика не загрузится');
-            return;
-        }
-        
+        if (!token) return;
+
         try {
             const response = await fetch(`${API_URL}user/stats`, {
-                headers: { 
+                headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             const data = await response.json();
-            console.log('Статистика получена:', data);
-            
+
             if (data.success) {
                 const bestWaveSpan = document.getElementById('userBestWave');
                 const totalKillsSpan = document.getElementById('userTotalKills');
-                
-                if (bestWaveSpan) {
-                    bestWaveSpan.textContent = data.stats?.best_wave || 0;
-                    console.log('bestWave обновлён:', data.stats?.best_wave);
-                }
-                if (totalKillsSpan) {
-                    totalKillsSpan.textContent = data.stats?.total_kills || 0;
-                    console.log('totalKills обновлён:', data.stats?.total_kills);
-                }
+
+                if (bestWaveSpan) bestWaveSpan.textContent = data.stats?.best_wave || 0;
+                if (totalKillsSpan) totalKillsSpan.textContent = data.stats?.total_kills || 0;
             }
         } catch (error) {
             console.error('Ошибка загрузки статистики:', error);
@@ -392,14 +359,14 @@ class UIManager {
             document.getElementById('userTotalKills').textContent = '0';
         }
     }
-    
+
     updateMapInfo() {
         const mapInfo = document.getElementById('mapInfo');
         if (mapInfo) {
             mapInfo.textContent = `Карта: ${this.getMapName(this.currentMap)}`;
         }
     }
-    
+
     selectMap(mapId) {
         this.currentMap = mapId;
         document.querySelectorAll('.map-card[data-map]').forEach(card => {
@@ -408,33 +375,33 @@ class UIManager {
         });
         this.updateMapInfo();
     }
-    
+
     selectCampaignLevel(level) {
         const progress = this.currentUser ? (this.currentUser.campaignProgress || 1) : 1;
         if (level > progress) return;
-        
+
         this.selectedCampaignLevel = level;
         document.querySelectorAll('.campaign-level').forEach(card => {
             card.classList.remove('selected');
             if (parseInt(card.dataset.level) === level) card.classList.add('selected');
         });
-        
+
         const startBtn = document.getElementById('startCampaignBtn');
         if (startBtn) startBtn.disabled = false;
     }
-    
+
     async login() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value;
-        
+
         if (!username || !password) {
             alert('Введите имя пользователя и пароль');
             return;
         }
-        
+
         if (window.TD_API) {
             const result = await window.TD_API.login(username, password);
-            
+
             if (result.success && result.user) {
                 this.currentUser = {
                     id: result.user.id,
@@ -443,95 +410,88 @@ class UIManager {
                     campaignProgress: result.user.campaign_progress || 1
                 };
                 sessionStorage.setItem('td_current_user', JSON.stringify(this.currentUser));
-                
+
                 const userNameSpan = document.getElementById('currentUserName');
                 if (userNameSpan) userNameSpan.textContent = this.currentUser.username;
-                
+
                 this.showMainMenu();
             } else {
                 alert(result.message || 'Ошибка входа');
             }
         }
     }
-    
+
     async register() {
         const username = document.getElementById('registerUsername').value.trim();
         const email = document.getElementById('registerEmail').value.trim();
         const password = document.getElementById('registerPassword').value;
         const confirm = document.getElementById('registerConfirm').value;
-        
+
         if (password !== confirm) {
             alert('Пароли не совпадают');
             return;
         }
-        
+
         if (!email || !email.includes('@') || !email.includes('.')) {
             alert('Введите корректный email (пример: user@mail.ru)');
             return;
         }
-        
+
         if (/[а-яА-ЯёЁ]/.test(email)) {
             alert('Email должен содержать только латинские символы');
             return;
         }
-        
-        if (!window.TD_API) {
-            alert('API не доступен');
-            return;
-        }
-        
-        try {
-            const result = await window.TD_API.register(username, email, password);
-            console.log('Результат регистрации:', result);
-            
-            if (result.success) {
-                this.currentUser = {
-                    id: result.user.id,
-                    username: result.user.username,
-                    email: result.user.email,
-                    campaignProgress: result.user.campaign_progress || 1
-                };
-                
-                sessionStorage.setItem('td_current_user', JSON.stringify(this.currentUser));
-                
-                const loginResult = await window.TD_API.login(username, password);
-                
-                if (loginResult.success && loginResult.token) {
-                    console.log('Автовход выполнен');
+
+        if (window.TD_API) {
+            try {
+                const result = await window.TD_API.register(username, email, password);
+
+                if (result.success) {
+                    this.currentUser = {
+                        id: result.user.id,
+                        username: result.user.username,
+                        email: result.user.email,
+                        campaignProgress: result.user.campaign_progress || 1
+                    };
+
+                    sessionStorage.setItem('td_current_user', JSON.stringify(this.currentUser));
+
+                    const loginResult = await window.TD_API.login(username, password);
+                    if (loginResult.success && loginResult.token) {
+                        console.log('Автовход выполнен');
+                    }
+
+                    const userNameSpan = document.getElementById('currentUserName');
+                    if (userNameSpan) userNameSpan.textContent = this.currentUser.username;
+
+                    this.showMainMenu();
+                } else {
+                    alert(result.message || 'Ошибка регистрации');
                 }
-                
-                const userNameSpan = document.getElementById('currentUserName');
-                if (userNameSpan) {
-                    userNameSpan.textContent = this.currentUser.username;
-                }
-                
-                this.showMainMenu();
-            } else {
-                alert(result.message || 'Ошибка регистрации');
+            } catch (error) {
+                console.error('Ошибка регистрации:', error);
+                alert('Ошибка при регистрации');
             }
-        } catch (error) {
-            console.error('Ошибка регистрации:', error);
-            alert('Ошибка при регистрации');
         }
     }
-    
+
     async logout() {
         if (window.TD_API) await window.TD_API.logout();
         this.currentUser = null;
         sessionStorage.removeItem('td_current_user');
         this.showLogin();
     }
-    
+
     playAsGuest() {
         this.currentUser = { id: 'guest_' + Date.now(), username: 'Гость', campaignProgress: 1 };
         this.startSandbox();
     }
-    
+
     startSandbox() {
         this.gameMode = 'sandbox';
         this.startGame();
     }
-    
+
     startCampaign() {
         if (!this.selectedCampaignLevel) {
             alert('Выберите уровень');
@@ -545,18 +505,22 @@ class UIManager {
         this.gameMode = 'campaign';
         this.startGame();
     }
-    
+
     startGame() {
         const mainMenu = document.getElementById('mainMenu');
         const container = document.querySelector('.container');
-        
+
         if (mainMenu) mainMenu.style.display = 'none';
         if (container) container.style.display = 'flex';
-        
+
         if (!window.game) window.game = new GameEngine();
-        
+
         if (this.gameMode === 'campaign') {
             const levelData = this.campaignLevels[this.selectedCampaignLevel];
+            if (!levelData) {
+                alert('Данные уровня не найдены');
+                return;
+            }
             window.game.init('campaign', levelData.map, levelData);
             const titleEl = document.getElementById('gameTitle');
             if (titleEl) titleEl.textContent = levelData.title;
@@ -567,24 +531,26 @@ class UIManager {
             if (titleEl) titleEl.textContent = `∞ Бесконечный режим: ${this.getMapName(this.currentMap)}`;
             this.updateMapInfo();
         }
-        
+
         window.game.start();
     }
-    
+
     showLevelDescription() {
         const levelData = this.campaignLevels[this.selectedCampaignLevel];
+        if (!levelData) return;
+
         const levelDescription = document.getElementById('levelDescription');
         if (!levelDescription) return;
-        
+
         const titleEl = document.getElementById('levelDescriptionTitle');
         const objectiveEl = document.getElementById('levelObjectiveText');
         const rewardEl = document.getElementById('levelRewardText');
         const tipsList = document.getElementById('levelTipsList');
-        
+
         if (titleEl) titleEl.textContent = levelData.title;
         if (objectiveEl) objectiveEl.textContent = levelData.objective;
         if (rewardEl) rewardEl.textContent = levelData.rewards;
-        
+
         if (tipsList) {
             tipsList.innerHTML = '';
             levelData.tips.forEach(tip => {
@@ -593,17 +559,17 @@ class UIManager {
                 tipsList.appendChild(li);
             });
         }
-        
+
         levelDescription.style.display = 'flex';
         const startBtn = levelDescription.querySelector('.start-level-btn');
         if (startBtn) startBtn.onclick = () => { levelDescription.style.display = 'none'; };
     }
-    
+
     getMapName(mapId) {
         const names = { wave: 'Волновая', zigzag: 'Зигзаг', curve: 'Извилистая', straight: 'Прямая' };
         return names[mapId] || mapId;
     }
-    
+
     returnToMenu() {
         if (window.game) { window.game.stop(); window.game = null; }
         const container = document.querySelector('.container');
@@ -612,7 +578,7 @@ class UIManager {
         if (mainMenu) mainMenu.style.display = 'flex';
         this.showMainMenu();
     }
-    
+
     updateGameUI(stats) {
         const livesEl = document.getElementById('lives');
         const waveEl = document.getElementById('wave');
@@ -623,7 +589,7 @@ class UIManager {
         if (moneyEl) moneyEl.textContent = `Деньги: ${stats.money}`;
         if (scoreEl) scoreEl.textContent = `Счёт: ${stats.score}`;
     }
-    
+
     updateMouseCoords(x, y) {
         const mouseX = document.getElementById('mouseX');
         const mouseY = document.getElementById('mouseY');
@@ -634,10 +600,10 @@ class UIManager {
         if (canvasWidth && window.game?.canvas) canvasWidth.textContent = Math.round(window.game.canvas.width / window.game.dpr);
         if (canvasHeight && window.game?.canvas) canvasHeight.textContent = Math.round(window.game.canvas.height / window.game.dpr);
     }
-    
+
     async saveGameResult(result) {
         if (!this.currentUser || this.currentUser.username === 'Гость') return;
-        
+
         try {
             const saveData = {
                 wave: result.wave,
@@ -652,10 +618,10 @@ class UIManager {
                 levelCompleted: this.selectedCampaignLevel || 1,
                 username: this.currentUser.username
             };
-            
+
             if (window.TD_API) {
                 await window.TD_API.saveGame(saveData);
-                
+
                 if (result.won && this.gameMode === 'campaign') {
                     const nextLevel = (this.selectedCampaignLevel || 1) + 1;
                     if (nextLevel > (this.currentUser.campaignProgress || 1)) {
@@ -671,18 +637,18 @@ class UIManager {
             console.error('Ошибка сохранения:', error);
         }
     }
-    
+
     showGameWin(result) {
         result.won = true;
         this.showGameOver(result);
     }
-    
+
     showGameOver(result) {
         const gameOver = document.getElementById('gameOver');
         if (!gameOver) return;
-        
+
         const isWin = result.won === true;
-        
+
         if (isWin) {
             gameOver.innerHTML = `
                 <div class="game-over-text" style="color: #2ef27b;">ПОБЕДА!</div>
@@ -708,15 +674,15 @@ class UIManager {
                 <div class="game-over-subtext pulse">Нажмите любую кнопку</div>
             `;
         }
-        
+
         gameOver.style.display = 'flex';
         this.saveGameResult(result);
-        
+
         if (this.currentUser && this.currentUser.username !== 'Гость') {
             this.loadUserStats();
             this.renderCampaignLevels();
         }
-        
+
         const continueHandler = () => {
             gameOver.style.display = 'none';
             this.returnToMenu();

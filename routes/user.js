@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const fs = require('fs');
+const path = require('path');
 
 router.get('/stats', authMiddleware, async (req, res) => {
     try {
@@ -34,6 +36,18 @@ router.put('/progress', authMiddleware, async (req, res) => {
         await db.query('UPDATE users SET campaign_progress = ? WHERE id = ?', [level, req.userId]);
         res.json({ success: true });
     } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.get('/campaign-levels', async (req, res) => {
+    try {
+        const filePath = path.join(__dirname, '../campaign-levels.json');
+        const data = fs.readFileSync(filePath, 'utf8');
+        const json = JSON.parse(data);
+        res.json({ success: true, levels: json.levels });
+    } catch (error) {
+        console.error('Ошибка загрузки уровней из JSON:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });

@@ -1,4 +1,6 @@
-const API_URL = 'https://td-python-4gr8.onrender.com/api/';
+const API_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:3000/api/' 
+    : 'https://td-python-4gr8.onrender.com/api/';
 
 const TD_API = {
     token: localStorage.getItem('api_token'),
@@ -61,6 +63,10 @@ const TD_API = {
     
     async updateProgress(level) {
         return await this.request('user/progress', 'PUT', { level });
+    },
+    
+    async getCampaignLevels() {
+        return await this.request('user/campaign-levels');
     }
 };
 

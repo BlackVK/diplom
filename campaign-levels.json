@@ -1,0 +1,81 @@
+{
+  "levels": [
+    {
+      "level_number": 1,
+      "title": "Уровень 1: Основы",
+      "map": "wave",
+      "objective": "Пройдите 5 волн врагов",
+      "description": "В этом уровне вы научитесь основам игры",
+      "tips": [
+        "Начните с построения башен на ключевых точках",
+        "Используйте build_tower('имя', x, y)",
+        "Размещайте башни на изгибах пути"
+      ],
+      "rewards": "Откроется Уровень 2",
+      "waves_to_win": 5,
+      "starting_money": 150,
+      "starting_lives": 10
+    },
+    {
+      "level_number": 2,
+      "title": "Уровень 2: Улучшения",
+      "map": "curve",
+      "objective": "Пройдите 8 волн",
+      "description": "",
+      "tips": [
+        "Постройте минимум 3 башни",
+        "Улучшайте башни с помощью upgrade_tower()",
+        "Балансируйте между строительством и улучшением"
+      ],
+      "rewards": "Откроется Уровень 3",
+      "waves_to_win": 8,
+      "starting_money": 200,
+      "starting_lives": 10
+    },
+    {
+      "level_number": 3,
+      "title": "Уровень 3: Лабиринт",
+      "map": "zigzag",
+      "objective": "Пройдите 10 волн",
+      "description": "",
+      "tips": [
+        "Размещайте башни в точках смены направления",
+        "Используйте башни с максимальной дальностью"
+      ],
+      "rewards": "Откроется Уровень 4",
+      "waves_to_win": 10,
+      "starting_money": 250,
+      "starting_lives": 10
+    },
+    {
+      "level_number": 4,
+      "title": "Уровень 4: Зигзаг",
+      "map": "zigzag",
+      "objective": "Пройдите 12 волн",
+      "description": "",
+      "tips": [
+        "Экономьте деньги",
+        "Сначала улучшайте ключевые башни"
+      ],
+      "rewards": "Откроется Уровень 5",
+      "waves_to_win": 12,
+      "starting_money": 200,
+      "starting_lives": 8
+    },
+    {
+      "level_number": 5,
+      "title": "Уровень 5: Финальный",
+      "map": "straight",
+      "objective": "Пройдите 15 волн",
+      "description": "",
+      "tips": [
+        "Стройте башни близко к пути",
+        "Создайте несколько линий защиты"
+      ],
+      "rewards": "Завершение кампании",
+      "waves_to_win": 15,
+      "starting_money": 300,
+      "starting_lives": 10
+    }
+  ]
+}
