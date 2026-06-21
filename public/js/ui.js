@@ -284,6 +284,15 @@ class UIManager {
     showSandboxMaps() {
         this.showSection('sandboxMapSection');
         this.currentMap = 'wave';
+        
+        document.querySelectorAll('.map-card[data-map]').forEach(card => {
+            card.classList.remove('selected');
+            if (card.dataset.map === 'wave') {
+                card.classList.add('selected');
+            }
+        });
+        
+        this.updateMapInfo();
     }
     
     showCampaignLevels() {
@@ -323,11 +332,15 @@ class UIManager {
     }
     
     async loadUserStats() {
-        if (!this.currentUser || this.currentUser.username === 'Гость') return;
+        if (!this.currentUser || this.currentUser.username === 'Гость') {
+            document.getElementById('userBestWave').textContent = '0';
+            document.getElementById('userTotalKills').textContent = '0';
+            return;
+        }
         
         try {
             const token = localStorage.getItem('api_token');
-            console.log('Загрузка статистики, токен:', token);
+            if (!token) return;
             
             const response = await fetch(`${API_URL}user/stats`, {
                 headers: { 
@@ -336,7 +349,6 @@ class UIManager {
                 }
             });
             const data = await response.json();
-            console.log('Статистика:', data);
             
             if (data.success) {
                 const bestWaveSpan = document.getElementById('userBestWave');
@@ -349,12 +361,20 @@ class UIManager {
         }
     }
     
+    updateMapInfo() {
+        const mapInfo = document.getElementById('mapInfo');
+        if (mapInfo) {
+            mapInfo.textContent = `Карта: ${this.getMapName(this.currentMap)}`;
+        }
+    }
+    
     selectMap(mapId) {
         this.currentMap = mapId;
         document.querySelectorAll('.map-card[data-map]').forEach(card => {
             card.classList.remove('selected');
             if (card.dataset.map === mapId) card.classList.add('selected');
         });
+        this.updateMapInfo();
     }
     
     selectCampaignLevel(level) {
@@ -415,10 +435,34 @@ class UIManager {
         
         if (window.TD_API) {
             const result = await window.TD_API.register(username, email, password);
+            
             if (result.success) {
-                this.currentUser = result.user;
+                this.currentUser = {
+                    id: result.user.id,
+                    username: result.user.username,
+                    email: result.user.email,
+                    campaignProgress: result.user.campaign_progress || 1
+                };
+                
                 sessionStorage.setItem('td_current_user', JSON.stringify(this.currentUser));
+                
+                const loginResult = await window.TD_API.login(username, password);
+                
+                if (loginResult.success && loginResult.token) {
+                    console.log('Автовход выполнен');
+                }
+                
+                const userNameSpan = document.getElementById('currentUserName');
+                if (userNameSpan) {
+                    userNameSpan.textContent = this.currentUser.username;
+                }
+                
                 this.showMainMenu();
+                
+                setTimeout(() => {
+                    this.loadUserStats();
+                }, 500);
+                
             } else {
                 alert(result.message);
             }
@@ -475,6 +519,7 @@ class UIManager {
             window.game.init('sandbox', this.currentMap);
             const titleEl = document.getElementById('gameTitle');
             if (titleEl) titleEl.textContent = `∞ Бесконечный режим: ${this.getMapName(this.currentMap)}`;
+            this.updateMapInfo();
         }
         
         window.game.start();
