@@ -238,14 +238,24 @@ class UIManager {
     
     checkSavedUser() {
         const savedUser = sessionStorage.getItem('td_current_user');
-        if (savedUser) {
+        const token = localStorage.getItem('api_token');
+        
+        console.log('Проверка сохранённого пользователя:', savedUser);
+        console.log('Токен:', token);
+        
+        if (savedUser && token) {
             try {
                 this.currentUser = JSON.parse(savedUser);
                 if (!this.currentUser.campaignProgress) this.currentUser.campaignProgress = 1;
                 this.showMainMenu();
             } catch (e) {
+                console.error('Ошибка загрузки пользователя:', e);
                 this.showLogin();
             }
+        } else if (savedUser && !token) {
+            console.log('Есть пользователь, но нет токена');
+            sessionStorage.removeItem('td_current_user');
+            this.showLogin();
         } else {
             this.showLogin();
         }
@@ -266,6 +276,8 @@ class UIManager {
     }
     
     showMainMenu() {
+        console.log('showMainMenu вызван, currentUser:', this.currentUser);
+        
         this.showSection('mainMenuSection');
         this.renderCampaignLevels();
         
@@ -278,7 +290,9 @@ class UIManager {
             }
         }
         
-        this.loadUserStats();
+        setTimeout(() => {
+            this.loadUserStats();
+        }, 300);
     }
     
     showSandboxMaps() {
@@ -332,32 +346,50 @@ class UIManager {
     }
     
     async loadUserStats() {
+        console.log('loadUserStats вызван, currentUser:', this.currentUser);
+        
         if (!this.currentUser || this.currentUser.username === 'Гость') {
             document.getElementById('userBestWave').textContent = '0';
             document.getElementById('userTotalKills').textContent = '0';
             return;
         }
         
+        const token = localStorage.getItem('api_token');
+        console.log('Токен для статистики:', token);
+        
+        if (!token) {
+            console.log('Нет токена, статистика не загрузится');
+            return;
+        }
+        
         try {
-            const token = localStorage.getItem('api_token');
-            if (!token) return;
-            
             const response = await fetch(`${API_URL}user/stats`, {
                 headers: { 
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
+            
             const data = await response.json();
+            console.log('Статистика получена:', data);
             
             if (data.success) {
                 const bestWaveSpan = document.getElementById('userBestWave');
                 const totalKillsSpan = document.getElementById('userTotalKills');
-                if (bestWaveSpan) bestWaveSpan.textContent = data.stats?.best_wave || 0;
-                if (totalKillsSpan) totalKillsSpan.textContent = data.stats?.total_kills || 0;
+                
+                if (bestWaveSpan) {
+                    bestWaveSpan.textContent = data.stats?.best_wave || 0;
+                    console.log('bestWave обновлён:', data.stats?.best_wave);
+                }
+                if (totalKillsSpan) {
+                    totalKillsSpan.textContent = data.stats?.total_kills || 0;
+                    console.log('totalKills обновлён:', data.stats?.total_kills);
+                }
             }
         } catch (error) {
             console.error('Ошибка загрузки статистики:', error);
+            document.getElementById('userBestWave').textContent = '0';
+            document.getElementById('userTotalKills').textContent = '0';
         }
     }
     
@@ -458,11 +490,6 @@ class UIManager {
                 }
                 
                 this.showMainMenu();
-                
-                setTimeout(() => {
-                    this.loadUserStats();
-                }, 500);
-                
             } else {
                 alert(result.message);
             }
