@@ -4,6 +4,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
+function isValidEmail(email) {
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+}
+
+function hasRussianLetters(text) {
+    return /[а-яА-ЯёЁ]/.test(text);
+}
+
 router.post('/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
@@ -16,13 +24,21 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Имя пользователя минимум 3 символа' });
         }
         
+        if (hasRussianLetters(email)) {
+            return res.status(400).json({ success: false, message: 'Email должен содержать только латинские символы' });
+        }
+        
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ success: false, message: 'Неверный формат email' });
+        }
+        
         if (password.length < 4) {
             return res.status(400).json({ success: false, message: 'Пароль минимум 4 символа' });
         }
         
-        const [existing] = await db.query('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
-        if (existing.length > 0) {
-            return res.status(400).json({ success: false, message: 'Пользователь уже существует' });
+        const [existingEmail] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+        if (existingEmail.length > 0) {
+            return res.status(400).json({ success: false, message: 'Этот email уже зарегистрирован' });
         }
         
         const passwordHash = await bcrypt.hash(password, 10);
@@ -56,6 +72,10 @@ router.post('/login', async (req, res) => {
         const { username, password } = req.body;
         const ip = req.ip || req.connection.remoteAddress;
         const userAgent = req.headers['user-agent'];
+        
+        if (!username || !password) {
+            return res.status(400).json({ success: false, message: 'Заполните все поля' });
+        }
         
         const [users] = await db.query('SELECT * FROM users WHERE username = ?', [username]);
         

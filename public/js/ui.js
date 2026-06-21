@@ -465,8 +465,24 @@ class UIManager {
             return;
         }
         
-        if (window.TD_API) {
+        if (!email || !email.includes('@') || !email.includes('.')) {
+            alert('Введите корректный email (пример: user@mail.ru)');
+            return;
+        }
+        
+        if (/[а-яА-ЯёЁ]/.test(email)) {
+            alert('Email должен содержать только латинские символы');
+            return;
+        }
+        
+        if (!window.TD_API) {
+            alert('API не доступен');
+            return;
+        }
+        
+        try {
             const result = await window.TD_API.register(username, email, password);
+            console.log('Результат регистрации:', result);
             
             if (result.success) {
                 this.currentUser = {
@@ -491,8 +507,11 @@ class UIManager {
                 
                 this.showMainMenu();
             } else {
-                alert(result.message);
+                alert(result.message || 'Ошибка регистрации');
             }
+        } catch (error) {
+            console.error('Ошибка регистрации:', error);
+            alert('Ошибка при регистрации');
         }
     }
     
